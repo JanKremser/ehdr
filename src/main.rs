@@ -1,6 +1,8 @@
 use std::string::String;
 use std::process::{Command, Stdio};
 use std::io::{BufRead, BufReader};
+use std::path::Path;
+use std::fs;
 
 use clap::{Arg, App};
 
@@ -11,20 +13,20 @@ const NEW_LINE: &'static str = "\n";
 
 fn main() {
     let matches = App::new("SimpleConvert")
-        .version("1.0")
+        .version("1.1")
         .author("Jan Kremser")
         .about("[...]")
         .arg(Arg::with_name("input")
             .short("i")
             .long("input")
-            .value_name("FILE")
-            .help("input file")
+            .value_name("FILE/FOLDER")
+            .help("input file or folder")
             .required(true)
         ).arg(Arg::with_name("output")
             .short("o")
             .long("output")
-            .value_name("FILE")
-            .help("output file")
+            .value_name("FILE/FOLDER")
+            .help("output file or folder")
             .required(true)
         ).arg(Arg::with_name("crf")
             .long("crf")
@@ -34,7 +36,7 @@ fn main() {
             .short("p")
             .long("preset")
             .value_name("STRING")
-            .help("preset from ffmpeg (default is 'superfast', alternative: [ultrafast, veryfast , fast, faster, medium])")
+            .help("preset from ffmpeg (default is 'superfast', alternative: [ultrafast, veryfast, fast, faster, medium])")
         ).arg(Arg::with_name("crop")
             .short("c")
             .long("crop")
@@ -55,14 +57,49 @@ fn main() {
         preset = matches.value_of("preset").unwrap();
     }
 
-    convert(
-        matches.value_of("input").unwrap(), 
-        matches.value_of("output").unwrap(),
-        &matches.is_present("crop"),
-        &crf,
-        preset,
-        &matches.is_present("hdr"),
-    );
+    let path_input = Path::new(matches.value_of("input").unwrap());
+
+    if path_input.is_dir() {
+        let path_output = Path::new(matches.value_of("output").unwrap());
+        if !path_output.is_dir() {
+            panic!("output is not a folder");
+        }
+
+        for entry in fs::read_dir(path_input).unwrap() {
+            let entry = entry.unwrap();
+            let input_file = entry.path();
+            if input_file.is_file() {
+                let mut output_file = path_output.to_path_buf();
+                output_file.push(input_file.file_name().unwrap());
+
+                match input_file.extension().unwrap().to_str().unwrap().to_uppercase().as_str() {
+                    "MKV" | "MP4" => {
+                        println!("input:   {:?}", input_file.to_str().unwrap());
+                        println!("output:  {:?}", output_file.to_str().unwrap());
+
+                        convert(
+                            input_file.to_str().unwrap(), 
+                            output_file.to_str().unwrap(),
+                            &matches.is_present("crop"),
+                            &crf,
+                            preset,
+                            &matches.is_present("hdr"),
+                        );
+                    }
+                    _ => print!("file is not suportet")
+                }
+            }
+        }
+    } else {
+        convert(
+            matches.value_of("input").unwrap(), 
+            matches.value_of("output").unwrap(),
+            &matches.is_present("crop"),
+            &crf,
+            preset,
+            &matches.is_present("hdr"),
+        );
+    }
 }
 
 fn convert(input_file: &str, output_file: &str, is_crop_active: &bool, crf: &u8, preset: &str, is_hdr: &bool) {
