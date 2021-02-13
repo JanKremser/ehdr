@@ -279,9 +279,9 @@ fn read_crop(input_file: &str) -> VideoCrop {
     println!("\n\n====> Start Check-Cropfactor");
     let output = Command::new("ffmpeg")
         .args(&[
-            "-ss", "5", 
             "-i", input_file,
-            "-vframes", "2000",
+            "-ss", "00:05:00",//starttime
+            "-t", "00:02:00",//offset
             "-vf", "cropdetect",
             "-f", "null", "-",
         ])
