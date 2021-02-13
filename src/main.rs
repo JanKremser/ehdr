@@ -36,7 +36,7 @@ fn main() {
             .short("p")
             .long("preset")
             .value_name("STRING")
-            .help("preset from ffmpeg (default is 'superfast', alternative: [ultrafast, veryfast, fast, faster, medium])")
+            .help("preset from ffmpeg (default is 'auto', alternative: [ultrafast, superfast, veryfast, faster, fast, medium])")
         ).arg(Arg::with_name("crop")
             .short("c")
             .long("crop")
@@ -52,7 +52,7 @@ fn main() {
         crf = matches.value_of("crf").unwrap().parse::<u8>().unwrap();
     }
 
-    let mut preset: &str = "superfast";
+    let mut preset: &str = "";
     if matches.is_present("preset") {
         preset = matches.value_of("preset").unwrap();
     }
@@ -113,7 +113,6 @@ fn convert(input_file: &str, output_file: &str, is_crop_active: &bool, crf: &u8,
         "-c:v", "libx265",
         "-c:a", "copy",
         "-sn",
-        "-preset", preset,
         "-pix_fmt", get_format_metadata(v["frames"][0]["pix_fmt"].as_str().unwrap()),
     ]);
 
@@ -130,6 +129,14 @@ fn convert(input_file: &str, output_file: &str, is_crop_active: &bool, crf: &u8,
             "-vf", &vc.to_ffmpeg_crop_str(),
         ]);
     }
+
+    ffmpeg.args(&[
+        "-preset",  &get_preset(
+            preset, 
+            width,
+            height
+        ),
+    ]);
 
     ffmpeg.args(&[
         "-crf",  &get_crf(
@@ -186,7 +193,7 @@ fn get_format_metadata(rgb_xy: &str) -> &str {
 fn get_crf(input_crf: &u8, width: u64, height: u64) -> String {
     if *input_crf > 0 {
         format!("{}", input_crf)
-    }else{
+    } else {
         let pixel = width * height;
         match pixel {
             p if p >= 6144000 => {//(>= 3820*1600)
@@ -218,6 +225,31 @@ fn get_crf(input_crf: &u8, width: u64, height: u64) -> String {
             }
             _ => {
                 format!("{}", 20)
+            }
+        }
+    }
+}
+
+fn get_preset(preset: &str, width: u64, height: u64) -> String {
+    if preset != "" {
+        format!("{}", preset)
+    } else {
+        let pixel = width * height;
+        match pixel {
+            p if p >= 8294401 => {//(>= 3820*2160)
+                format!("{}", "superfast")
+            }
+            2211841..=8294400 => {
+                format!("{}", "veryfast")
+            }
+            2073600..=2211840 => {//2K/FHD
+                format!("{}", "faster")
+            }
+            1579885..=2073599 => {
+                format!("{}", "fast")
+            }
+            _ => {
+                format!("{}", "medium")
             }
         }
     }
