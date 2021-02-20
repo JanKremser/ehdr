@@ -6,14 +6,12 @@ use std::fs;
 
 use clap::{Arg, App};
 
-#[cfg(windows)]
-const NEW_LINE: &'static str = "\r\n";
-#[cfg(not(windows))]
-const NEW_LINE: &'static str = "\n";
+mod video;
+use video::Video;
 
 fn main() {
     let matches = App::new("SimpleConvert")
-        .version("1.1")
+        .version("0.2.0")
         .author("Jan Kremser")
         .about("[...]")
         .arg(Arg::with_name("input")
@@ -41,10 +39,6 @@ fn main() {
             .short("c")
             .long("crop")
             .help("Auto crop function")
-        ).arg(Arg::with_name("hdr")
-            .short("H")
-            .long("hdr")
-            .help("copy hdr metadata")
         ).get_matches();
 
     let mut crf: u8 = 0;
@@ -77,13 +71,14 @@ fn main() {
                         println!("input:   {:?}", input_file.to_str().unwrap());
                         println!("output:  {:?}", output_file.to_str().unwrap());
 
+                        let mut input_video = Video::new(&input_file).unwrap();
+
                         convert(
-                            input_file.to_str().unwrap(), 
+                            &mut input_video, 
                             output_file.to_str().unwrap(),
                             &matches.is_present("crop"),
                             &crf,
                             preset,
-                            &matches.is_present("hdr"),
                         );
                     }
                     _ => print!("file is not suportet")
@@ -91,85 +86,80 @@ fn main() {
             }
         }
     } else {
+        let input_file = Path::new(matches.value_of("input").unwrap());
+        let mut input_video = Video::new(&input_file).unwrap();
+
         convert(
-            matches.value_of("input").unwrap(), 
+            &mut input_video, 
             matches.value_of("output").unwrap(),
             &matches.is_present("crop"),
             &crf,
             preset,
-            &matches.is_present("hdr"),
         );
     }
 }
 
-fn convert(input_file: &str, output_file: &str, is_crop_active: &bool, crf: &u8, preset: &str, is_hdr: &bool) {
-    let v: serde_json::Value = read_hdr_metadata(input_file);
-    println!("---Metadata: \n{:#?}\n\n", v);
+fn convert(input_video: &mut Video, output_file: &str, is_crop_active: &bool, crf: &u8, preset: &str) {
+    println!("---Metadata: \n{:#?}", input_video);
 
     let mut ffmpeg: Command = Command::new("ffmpeg");
     ffmpeg.args(&[
-        "-i", input_file,
+        "-i", input_video.get_path_str().unwrap(),
         "-map", "0",
         "-c:v", "libx265",
         "-c:a", "copy",
         "-sn",
-        "-pix_fmt", get_format_metadata(v["frames"][0]["pix_fmt"].as_str().unwrap()),
+        "-pix_fmt", input_video.get_pix_fmt().unwrap(),
     ]);
 
-    let mut width = v["frames"][0]["width"].as_u64().unwrap();
-    let mut height = v["frames"][0]["height"].as_u64().unwrap();
-
     if *is_crop_active {
-        let vc = read_crop(input_file);
-
-        width = vc.w;
-        height = vc.h;
+        input_video.crop_video();
 
         ffmpeg.args(&[
-            "-vf", &vc.to_ffmpeg_crop_str(),
+            "-vf", &input_video.get_ffmpeg_crop_str(),
         ]);
     }
 
     ffmpeg.args(&[
         "-preset",  &get_preset(
             preset, 
-            width,
-            height
+            input_video.get_width(),
+            input_video.get_height(),
         ),
     ]);
 
     ffmpeg.args(&[
         "-crf",  &get_crf(
             crf, 
-            width,
-            height
+            input_video.get_width(),
+            input_video.get_height(),
         ),
     ]);
 
-    if *is_hdr {
+    if input_video.is_hdr_video() {
+        println!("=== HDR video detected ===");
         ffmpeg.args(&[
             "-x265-params",
             &format!(
                 "hdr-opt=1:repeat-headers=1:colorprim={colorprim}:transfer={transfer}:colormatrix={colormatrix}:master-display=G({green_x},{green_y})B({blue_x},{blue_y})R({red_x},{red_y})WP({white_point_x},{white_point_y})L({max_luminance},{min_luminance}):max-cll=0,0", 
-                colorprim = get_format_metadata(v["frames"][0]["color_primaries"].as_str().unwrap()),
-                colormatrix = get_format_metadata(v["frames"][0]["color_space"].as_str().unwrap()),
-                transfer = get_format_metadata(v["frames"][0]["color_transfer"].as_str().unwrap()),
-                green_x = get_format_metadata(v["frames"][0]["side_data_list"][0]["green_x"].as_str().unwrap()),
-                green_y = get_format_metadata(v["frames"][0]["side_data_list"][0]["green_y"].as_str().unwrap()),
-                blue_x = get_format_metadata(v["frames"][0]["side_data_list"][0]["blue_x"].as_str().unwrap()),
-                blue_y = get_format_metadata(v["frames"][0]["side_data_list"][0]["blue_y"].as_str().unwrap()),
-                red_x = get_format_metadata(v["frames"][0]["side_data_list"][0]["red_x"].as_str().unwrap()),
-                red_y = get_format_metadata(v["frames"][0]["side_data_list"][0]["red_y"].as_str().unwrap()),
-                white_point_x = get_format_metadata(v["frames"][0]["side_data_list"][0]["white_point_x"].as_str().unwrap()),
-                white_point_y = get_format_metadata(v["frames"][0]["side_data_list"][0]["white_point_y"].as_str().unwrap()),
-                max_luminance = get_format_metadata(v["frames"][0]["side_data_list"][0]["max_luminance"].as_str().unwrap()),
-                min_luminance = get_format_metadata(v["frames"][0]["side_data_list"][0]["min_luminance"].as_str().unwrap()),
+                colorprim = input_video.get_color_primaries().unwrap(),
+                colormatrix = input_video.get_color_space().unwrap(),
+                transfer = input_video.get_color_transfer().unwrap(),
+                green_x = input_video.get_side_data_list_param("green_x").unwrap(),
+                green_y = input_video.get_side_data_list_param("green_y").unwrap(),
+                blue_x = input_video.get_side_data_list_param("blue_x").unwrap(),
+                blue_y = input_video.get_side_data_list_param("blue_y").unwrap(),
+                red_x = input_video.get_side_data_list_param("red_x").unwrap(),
+                red_y = input_video.get_side_data_list_param("red_y").unwrap(),
+                white_point_x = input_video.get_side_data_list_param("white_point_x").unwrap(),
+                white_point_y = input_video.get_side_data_list_param("white_point_y").unwrap(),
+                max_luminance = input_video.get_side_data_list_param("max_luminance").unwrap(),
+                min_luminance = input_video.get_side_data_list_param("min_luminance").unwrap(),
             ),
         ]);
     }
 
     ffmpeg.arg(output_file);
-
 
     let out = ffmpeg.stdout(Stdio::piped()).spawn();
     
@@ -181,13 +171,6 @@ fn convert(input_file: &str, output_file: &str, is_crop_active: &bool, crf: &u8,
         .lines()
         .filter_map(|line| line.ok())
         .for_each(|line| println!("{}", line));
-}
-
-fn get_format_metadata(rgb_xy: &str) -> &str {
-    let re = regex::Regex::new(r"/").unwrap();
-    let fields: Vec<&str> = re.splitn(rgb_xy, 2).collect();
-
-    fields[0]
 }
 
 fn get_crf(input_crf: &u8, width: u64, height: u64) -> String {
@@ -252,101 +235,5 @@ fn get_preset(preset: &str, width: u64, height: u64) -> String {
                 format!("{}", "medium")
             }
         }
-    }
-}
-
-fn read_hdr_metadata(input_file: &str) -> serde_json::Value {
-    let output = Command::new("ffprobe")
-        .args(&[
-            "-hide_banner", 
-            "-loglevel", "warning",
-            "-select_streams", "v",
-            "-print_format", "json",
-            "-show_frames",
-            "-read_intervals", "%+#1",
-            "-show_entries", "frame=color_space,color_primaries,color_transfer,side_data_list,pix_fmt,width,height",
-            "-i", input_file
-        ])
-        .output()
-        .expect("ffprobe command failed to start");
-    
-    let out = String::from_utf8(output.stdout).expect("Failed to convert stdout to string.");
-
-    serde_json::from_str(&out).unwrap()
-}
-
-fn read_crop(input_file: &str) -> VideoCrop {
-    println!("\n\n====> Start Check-Cropfactor");
-    let output = Command::new("ffmpeg")
-        .args(&[
-            "-i", input_file,
-            "-ss", "00:05:00",//starttime
-            "-t", "00:02:00",//offset
-            "-vf", "cropdetect",
-            "-f", "null", "-",
-        ])
-        .output()
-        .expect("ffmpeg command failed to start");
-
-    let out = String::from_utf8(output.stderr).expect("Failed to convert stdout to string.");
-
-    let re = regex::Regex::new(r"crop=").unwrap();
-    let fields: Vec<&str> = re.splitn(&out, 100).collect();
-
-    let mut crop: VideoCrop = VideoCrop {
-        w: 0,
-        h: 0,
-        x: 0,
-        y: 0,
-    };
-
-    for i in fields {
-        //let test = &i[0..13];
-        let crop_temp = VideoCrop::new(
-            &i.split(NEW_LINE).next().unwrap()
-        );
-        
-        if let Some(s_corp) = crop_temp {
-            if crop.is_smaller_than(&s_corp) {
-                crop = s_corp;
-            }
-        }
-    }
-
-    println!("crip: {:?}\n\n\n", crop);
-
-    crop
-}
-
-#[derive(Debug)]
-struct VideoCrop {
-    w: u64,
-    h: u64,
-    x: u64,
-    y: u64
-}
-
-impl VideoCrop {
-    fn new(crop: &str) -> Option<Self> {
-        let mut split = crop.split(":");
-        Some(
-            VideoCrop {
-                w: split.next()?.parse::<u64>().ok()?,
-                h: split.next()?.parse::<u64>().ok()?,
-                x: split.next()?.parse::<u64>().ok()?,
-                y: split.next()?.parse::<u64>().ok()?,
-            }
-        )
-    }
-    fn is_smaller_than(&self, crop: &VideoCrop) -> bool {
-        !(self.w > crop.w && self.h > crop.h && self.x < crop.x && self.y < crop.y)
-    }
-    fn to_ffmpeg_crop_str(&self) -> String{
-        format!("crop={w}:{h}:{x}:{y}",
-            w = self.w,
-            h = self.h,
-            x = self.x,
-            y = self.y
-        )
     }
 }

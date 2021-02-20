@@ -1,6 +1,6 @@
 [package]
 name = "simple_convert"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["Jan <jan@nerdbrief.de>"]
 edition = "2018"
 
