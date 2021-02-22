@@ -11,7 +11,7 @@ use video::Video;
 
 fn main() {
     let matches = App::new("SimpleConvert")
-        .version("0.2.0")
+        .version("0.2.1")
         .author("Jan Kremser")
         .about("[...]")
         .arg(Arg::with_name("input")
@@ -29,16 +29,16 @@ fn main() {
         ).arg(Arg::with_name("crf")
             .long("crf")
             .value_name("INT")
-            .help("crf from ffmpeg (default is [13; >=UHD] to [18, =FHD] && [20; >FHD] )")
+            .help("crf from ffmpeg (default is 'auto')")
         ).arg(Arg::with_name("preset")
             .short("p")
             .long("preset")
             .value_name("STRING")
             .help("preset from ffmpeg (default is 'auto', alternative: [ultrafast, superfast, veryfast, faster, fast, medium])")
-        ).arg(Arg::with_name("crop")
-            .short("c")
-            .long("crop")
-            .help("Auto crop function")
+        ).arg(Arg::with_name("none-crop")
+            .short("nc")
+            .long("ncrop")
+            .help("disabled auto-crop function")
         ).get_matches();
 
     let mut crf: u8 = 0;
@@ -76,7 +76,7 @@ fn main() {
                         convert(
                             &mut input_video, 
                             output_file.to_str().unwrap(),
-                            &matches.is_present("crop"),
+                            &matches.is_present("none-crop"),
                             &crf,
                             preset,
                         );
@@ -92,14 +92,14 @@ fn main() {
         convert(
             &mut input_video, 
             matches.value_of("output").unwrap(),
-            &matches.is_present("crop"),
+            &matches.is_present("none-crop"),
             &crf,
             preset,
         );
     }
 }
 
-fn convert(input_video: &mut Video, output_file: &str, is_crop_active: &bool, crf: &u8, preset: &str) {
+fn convert(input_video: &mut Video, output_file: &str, is_crop_disabled: &bool, crf: &u8, preset: &str) {
     println!("---Metadata: \n{:#?}", input_video);
 
     let mut ffmpeg: Command = Command::new("ffmpeg");
@@ -115,7 +115,7 @@ fn convert(input_video: &mut Video, output_file: &str, is_crop_active: &bool, cr
         "-pix_fmt", input_video.get_pix_fmt().unwrap(),
     ]);
 
-    if *is_crop_active {
+    if *is_crop_disabled == false {
         input_video.crop_video();
 
         ffmpeg.args(&[
@@ -182,10 +182,10 @@ fn get_crf(input_crf: &u8, width: u64, height: u64) -> String {
     } else {
         let pixel = width * height;
         match pixel {
-            p if p >= 6144000 => {//(>= 3820*1600)
+            p if p >= 6144000 => {// >= UHD(3820*1600 / 21:09)
                 format!("{}", 13)
             }
-            2211841..=6143999 => {
+            2211841..=6143999 => {// <>
                 let range: u64 = 4;
                 let diff: u64 = 6143999 - 2211841;
 
@@ -203,10 +203,10 @@ fn get_crf(input_crf: &u8, width: u64, height: u64) -> String {
 
                 format!("{}", crf)
             }
-            2073600..=2211840 => {//2K/FHD
+            2073600..=2211840 => {// >= FHD(1920*1080 / 16:09) to 2K(2048*1080 / ~17:09)
                 format!("{}", 18)
             }
-            1579885..=2073599 => {
+            1536000..=2073599 => {// >= FHD(1920*800 / 21:09)
                 format!("{}", 19)
             }
             _ => {
@@ -222,16 +222,16 @@ fn get_preset(preset: &str, width: u64, height: u64) -> String {
     } else {
         let pixel = width * height;
         match pixel {
-            p if p >= 8294401 => {//(>= 3820*2160)
+            p if p >= 8847361 => {// > 4K(4096*2160 / ~17:09)
                 format!("{}", "superfast")
             }
-            2211841..=8294400 => {
+            2211841..=8847360 => {// <>
                 format!("{}", "veryfast")
             }
-            2073600..=2211840 => {//2K/FHD
+            2073600..=2211840 => {// >= FHD(1920*1080 / 16:09) to 2K(2048*1080 / ~17:09)
                 format!("{}", "faster")
             }
-            1579885..=2073599 => {
+            1536000..=2073599 => {// >= FHD(1920*800 / 21:09)
                 format!("{}", "fast")
             }
             _ => {
