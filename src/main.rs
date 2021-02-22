@@ -36,7 +36,6 @@ fn main() {
             .value_name("STRING")
             .help("preset from ffmpeg (default is 'auto', alternative: [ultrafast, superfast, veryfast, faster, fast, medium])")
         ).arg(Arg::with_name("none-crop")
-            .short("nc")
             .long("ncrop")
             .help("disabled auto-crop function")
         ).get_matches();
