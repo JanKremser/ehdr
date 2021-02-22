@@ -105,10 +105,13 @@ fn convert(input_video: &mut Video, output_file: &str, is_crop_active: &bool, cr
     let mut ffmpeg: Command = Command::new("ffmpeg");
     ffmpeg.args(&[
         "-i", input_video.get_path_str().unwrap(),
-        "-map", "0",
-        "-c:v", "libx265",
+        "-map", "0:a?",
+        "-map", "0:s?",
+        "-map", "0:v",
         "-c:a", "copy",
-        "-sn",
+        "-c:s", "copy",
+        "-c:v", "libx265",
+        //"-sn",
         "-pix_fmt", input_video.get_pix_fmt().unwrap(),
     ]);
 
