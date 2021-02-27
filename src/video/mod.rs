@@ -16,6 +16,7 @@ pub struct Video<'a> {
     width: u64,
     crop_x: u64,
     crop_y: u64,
+    crop_video: bool,
 }
 
 impl <'a> Video<'a> {
@@ -35,6 +36,7 @@ impl <'a> Video<'a> {
                 width,
                 crop_x: 0,
                 crop_y: 0,
+                crop_video: false,
             }
         )
     }
@@ -80,12 +82,20 @@ impl <'a> Video<'a> {
         )
     }
 
-    pub fn get_width(&self) -> u64 {
-        self.width
-    }
-
-    pub fn get_height(&self) -> u64 {
-        self.height
+    pub fn get_master_display(&self) -> String {
+        format!(
+            "G({green_x},{green_y})B({blue_x},{blue_y})R({red_x},{red_y})WP({white_point_x},{white_point_y})L({max_luminance},{min_luminance})", 
+            green_x = self.get_side_data_list_param("green_x").unwrap(),
+            green_y = self.get_side_data_list_param("green_y").unwrap(),
+            blue_x = self.get_side_data_list_param("blue_x").unwrap(),
+            blue_y = self.get_side_data_list_param("blue_y").unwrap(),
+            red_x = self.get_side_data_list_param("red_x").unwrap(),
+            red_y = self.get_side_data_list_param("red_y").unwrap(),
+            white_point_x = self.get_side_data_list_param("white_point_x").unwrap(),
+            white_point_y = self.get_side_data_list_param("white_point_y").unwrap(),
+            max_luminance = self.get_side_data_list_param("max_luminance").unwrap(),
+            min_luminance = self.get_side_data_list_param("min_luminance").unwrap(),
+        )
     }
 
     pub fn get_ffmpeg_crop_str(&self) -> String {
@@ -104,8 +114,71 @@ impl <'a> Video<'a> {
         }
     }
 
+    pub fn get_auto_crf(&self) -> String {
+        let pixel = self.width * self.height;
+        match pixel {
+            p if p >= 6144000 => {// >= UHD(3820*1600 / 21:09)
+                format!("{}", 13)
+            }
+            2211841..=6143999 => {// <>
+                let range: u64 = 4;
+                let diff: u64 = 6143999 - 2211841;
+
+                let step: u64 = diff / range;
+
+                let mut crf = 18;
+                let mut temp_pixel: u64 = 2211841;
+                
+                while pixel > temp_pixel {
+                    temp_pixel = temp_pixel + step;
+                    crf = crf - 1;
+
+                    println!("crf: {}, pixel: {}, pixel_temp: {}", crf, pixel, temp_pixel);
+                }
+
+                format!("{}", crf)
+            }
+            2073600..=2211840 => {// >= FHD(1920*1080 / 16:09) to 2K(2048*1080 / ~17:09)
+                format!("{}", 18)
+            }
+            1536000..=2073599 => {// >= FHD(1920*800 / 21:09)
+                format!("{}", 19)
+            }
+            _ => {
+                format!("{}", 20)
+            }
+        }
+    }
+
+    pub fn get_auto_preset(&self) -> String {
+        let pixel = self.width * self.height;
+        match pixel {
+            p if p >= 8847361 => {// > 4K(4096*2160 / ~17:09)
+                format!("{}", "superfast")
+            }
+            2211841..=8847360 => {// <>
+                format!("{}", "faster")
+            }
+            2073600..=2211840 => {// >= FHD(1920*1080 / 16:09) to 2K(2048*1080 / ~17:09)
+                format!("{}", "faster")
+            }
+            1536000..=2073599 => {// >= FHD(1920*800 / 21:09)
+                format!("{}", "fast")
+            }
+            _ => {
+                format!("{}", "medium")
+            }
+        }
+    }
+
+    pub fn is_croped_video(&self) -> bool{
+        self.crop_video
+    }
+
     pub fn crop_video(&mut self) {
         println!("\n\n====> Start Check-Cropfactor");
+
+        self.crop_video = true;
 
         let start_sec = 60;
         let threads_count = 10;
