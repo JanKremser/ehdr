@@ -14,6 +14,7 @@ pub fn extract_rpu(input_file: &str){
 
     let output = Command::new("dovi_tool")
         .args(&[
+            "-m", "2",//to 8.1
             "extract-rpu",
             "--rpu-out", &format!("{}.rpu", input_file),
             "-",

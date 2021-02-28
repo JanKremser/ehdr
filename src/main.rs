@@ -61,7 +61,7 @@ fn main() {
                 output_file.push(input_file.file_name().unwrap());
 
                 match input_file.extension().unwrap().to_str().unwrap().to_uppercase().as_str() {
-                    "MKV" | "MP4" => {
+                    "MKV" | "M2TS" | "TS" | "MP4" => {
                         println!("input:   {:?}", input_file.to_str().unwrap());
                         println!("output:  {:?}", output_file.to_str().unwrap());
 
@@ -115,6 +115,8 @@ fn convert(input_file: Option<&str>, output_file: Option<&str>, is_crop: bool, i
         target_preset = input_video.get_auto_preset();
     }
 
+    println!("---Metadata: \n{:#?}", input_video);
+
     if is_dolpy_vision {
         convert_dolpy_vision(&input_video, output_file?, &target_crf, &target_preset)
     }else{
@@ -140,7 +142,7 @@ fn convert_dolpy_vision(input_video: &Video, output_file: &str, crf: &str, prese
         .stdout(Stdio::piped())
         .spawn().unwrap().stdout.expect("ffmpeg command failed to start");
 
-    let output = Command::new("x265")
+    Command::new("x265")
         .args(&[
             "-",
             "--input-depth", "10",//10bit
@@ -160,17 +162,13 @@ fn convert_dolpy_vision(input_video: &Video, output_file: &str, crf: &str, prese
             &format!("{}.hevc", output_file),
         ])
         .stdin(ffmpeg_out)
+        .stdout(Stdio::piped())
         .output()
-        .expect("x265 command failed to start"); 
-
-    let out = String::from_utf8(output.stdout).expect("Failed to convert stdout to string.");
-
-    println!("{:#?}", out);
+        .expect("Failed to execute command");
+    
 }
 
 fn convert_sdr_hdr10(input_video: &Video, output_file: &str, crf: &str, preset: &str) {
-    println!("---Metadata: \n{:#?}", input_video);
-
     let mut ffmpeg: Command = Command::new("ffmpeg");
     ffmpeg.args(&[
         "-i", input_video.get_path_str().unwrap(),
