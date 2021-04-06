@@ -12,10 +12,10 @@ use video::Video;
 mod dolpy_vision;
 
 fn main() {
-    let matches = App::new("SimpleConvert")
-        .version("0.2.1")
-        .author("Jan Kremser")
-        .about("[...]")
+    let matches = App::new(env!("CARGO_PKG_NAME"))
+        .version(env!("CARGO_PKG_VERSION"))
+        .author(env!("CARGO_PKG_AUTHORS"))
+        .about(env!("CARGO_PKG_DESCRIPTION"))
         .arg(Arg::with_name("input")
             .short("i")
             .long("input")

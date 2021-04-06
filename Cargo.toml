@@ -1,8 +1,10 @@
 [package]
-name = "simple_convert"
+name = "ehdr"
 version = "0.3.0"
-authors = ["Jan <jan@nerdbrief.de>"]
+authors = ["Jan Kremser <git@nerdbrief.de>"]
 edition = "2018"
+description = "easy hdr video converter"
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
