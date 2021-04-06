@@ -8,7 +8,7 @@
 
 ---
 
-All videos are converted to h265(hevc). The combination settings are set dynamically based on the resolution. These can be influenced with the parameters `--crf` and `--preset`. Read the [ffmpeg](https://trac.ffmpeg.org/wiki/Encode/H.265) documentation for this.
+All videos are converted to h265(hevc). The compression settings are set dynamically based on the resolution. These can be influenced with the parameters `--crf` and `--preset`. Read the [ffmpeg](https://trac.ffmpeg.org/wiki/Encode/H.265) documentation for this.
 
 ## Dependencies:
 * [ffmpeg / ffprobe](https://ffmpeg.org/download.html)
